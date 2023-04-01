@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
-
+import re
 from . import db
 from .models import User
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,7 +24,7 @@ def login():
                 flash('Incorrect password, try again.', category='error')
         else:
             flash('Email does not exist.', category='error')
-    return render_template("login.html")
+    return render_template("login.html", user=current_user)
 
 
 @auth.route('/logout')
@@ -44,19 +44,31 @@ def change_password():
 
         user = User.query.filter_by(email=current_user.email).first()
         if user:
-            if check_password_hash(user.password, current_password):
-                if new_password == confirm_password:
-                    user.password = generate_password_hash(new_password, method='sha256')
-                    db.session.commit()
-                    flash('Password changed successfully!', category='success')
-                    return redirect(url_for('views.home'))
-                else:
-                    flash('Passwords don\'t match.', category='error')
+
+            if len(new_password) < 7:
+                flash('Password must be at least 7 characters.', category='error')
+            elif not re.search('[a-z]', new_password):
+                flash('Password must contain at least one lowercase letter.', category='error')
+            elif not re.search('[A-Z]', new_password):
+                flash('Password must contain at least one uppercase letter.', category='error')
+            elif not re.search('[0-9]', new_password):
+                flash('Password must contain at least one number.', category='error')
+            elif not re.search("[\W]", new_password):
+                flash('Password must contain at least one special character.', category='error')
             else:
-                flash('Incorrect password, try again.', category='error')
+                if check_password_hash(user.password, current_password):
+                    if new_password == confirm_password:
+                        user.password = generate_password_hash(new_password, method='sha256')
+                        db.session.commit()
+                        flash('Password changed successfully!', category='success')
+                        return redirect(url_for('views.home'))
+                    else:
+                        flash('Passwords don\'t match.', category='error')
+                else:
+                    flash('Incorrect password, try again.', category='error')
         else:
             flash('Email does not exist.', category='error')
-    return render_template("change_password.html")
+    return render_template("change_password.html", user=current_user)
 
 
 @auth.route('/sign-up', methods=['GET', 'POST'])
@@ -77,14 +89,57 @@ def sign_up():
             flash('Passwords don\'t match.', category='error')
         elif len(password1) < 7:
             flash('Password must be at least 7 characters.', category='error')
+        elif not re.search('[a-z]', password1):
+            flash('Password must contain at least one lowercase letter.', category='error')
+        elif not re.search('[A-Z]', password1):
+            flash('Password must contain at least one uppercase letter.', category='error')
+        elif not re.search('[0-9]', password1):
+            flash('Password must contain at least one number.', category='error')
+        elif not re.search("[\W]", password1):
+            flash('Password must contain at least one special character.', category='error')
         else:
             # add user to database
             new_user = User(email=email, first_name=first_name,
                             password=generate_password_hash(password1, method='sha256'))
             db.session.add(new_user)
             db.session.commit()
-            login_user(user, remember=True)
+            login_user(new_user, remember=True)
             flash('Account created!', category='success')
             return redirect(url_for('views.home'))
 
-    return render_template("sign_up.html")
+    return render_template("sign_up.html", user=current_user)
+
+
+@auth.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        new_password = request.form.get('newPassword')
+        confirm_password = request.form.get('confirmPassword')
+        user = User.query.filter_by(email=email).first()
+        print(user)
+        if user:
+            flash('Email exists.', category='success')
+            if len(new_password) < 7:
+                flash('Password must be at least 7 characters.', category='error')
+            elif not re.search('[a-z]', new_password):
+                flash('Password must contain at least one lowercase letter.', category='error')
+            elif not re.search('[A-Z]', new_password):
+                flash('Password must contain at least one uppercase letter.', category='error')
+            elif not re.search('[0-9]', new_password):
+                flash('Password must contain at least one number.', category='error')
+            elif not re.search("[\W]", new_password):
+                flash('Password must contain at least one special character.', category='error')
+            else:
+                if new_password == confirm_password:
+                    user.password = generate_password_hash(new_password, method='sha256')
+                    db.session.commit()
+                    flash('Password changed successfully!', category='success')
+                    return redirect(url_for('auth.login'))
+                else:
+                    flash('Passwords don\'t match.', category='error')
+        else:
+            flash('Email does not exist.', category='error')
+            return redirect(url_for('auth.login'))
+
+    return render_template("forgot_password.html", user=current_user)
